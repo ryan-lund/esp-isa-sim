@@ -252,6 +252,8 @@ public:
   void reset();
   void step(size_t n); // run for n cycles
   void set_csr(int which, reg_t val);
+  void set_cosim_path(const char* cosim_path) {this->cosim_path = cosim_path; }
+  const char* get_cosim_path() { return cosim_path; }
   reg_t get_csr(int which);
   mmu_t* get_mmu() { return mmu; }
   state_t* get_state() { return &state; }
@@ -264,6 +266,7 @@ public:
            supports_extension('F') ? 32 : 0;
   }
   extension_t* get_extension() { return ext; }
+  void fence_extension();
   bool supports_extension(unsigned char ext) {
     if (ext >= 'a' && ext <= 'z') ext += 'A' - 'a';
     return ext >= 'A' && ext <= 'Z' && ((state.misa >> (ext - 'A')) & 1);
@@ -393,6 +396,7 @@ private:
   bool log_commits_enabled;
   FILE *log_file;
   bool halt_on_reset;
+  const char* cosim_path;
 
   std::vector<insn_desc_t> instructions;
   std::map<reg_t,uint64_t> pc_histogram;

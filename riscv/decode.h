@@ -206,6 +206,7 @@ private:
 #define RS2 READ_REG(insn.rs2())
 #define RS3 READ_REG(insn.rs3())
 #define WRITE_RD(value) WRITE_REG(insn.rd(), value)
+#define FENCE_EXTENSION p->fence_extension();
 
 #ifndef RISCV_ENABLE_COMMITLOG
 # define WRITE_REG(reg, value) STATE.XPR.write(reg, value)

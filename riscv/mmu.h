@@ -13,6 +13,7 @@
 #include "byteorder.h"
 #include <stdlib.h>
 #include <vector>
+#include <mutex>
 
 // virtual memory configuration
 #define PGSHIFT 12
@@ -58,6 +59,8 @@ public:
   mmu_t(simif_t* sim, processor_t* proc);
   ~mmu_t();
 
+  std::mutex mmu_mutex;
+
   inline reg_t misaligned_load(reg_t addr, size_t size)
   {
 #ifdef RISCV_ENABLE_MISALIGNED
@@ -90,6 +93,7 @@ public:
   // template for functions that load an aligned value from memory
   #define load_func(type) \
     inline type##_t load_##type(reg_t addr) { \
+      std::lock_guard<std::mutex> lg_load_##type(mmu_mutex); \
       if (unlikely(addr & (sizeof(type##_t)-1))) \
         return misaligned_load(addr, sizeof(type##_t)); \
       reg_t vpn = addr >> PGSHIFT; \
@@ -136,6 +140,7 @@ public:
   // template for functions that store an aligned value to memory
   #define store_func(type) \
     void store_##type(reg_t addr, type##_t val) { \
+      std::lock_guard<std::mutex> lg_store_##type(mmu_mutex); \
       if (unlikely(addr & (sizeof(type##_t)-1))) \
         return misaligned_store(addr, val, sizeof(type##_t)); \
       reg_t vpn = addr >> PGSHIFT; \

@@ -4,6 +4,13 @@
 #include <stdexcept>
 #include <iostream>
 #include <assert.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <fstream>
+#include <poll.h>
+#include <unistd.h>
+#include "TL.pb.h"
+#include <google/protobuf/util/delimited_message_util.h>
 
 REGISTER_EXTENSION(gemmini, []() { return new gemmini_t; })
 
@@ -40,6 +47,80 @@ void gemmini_state_t::reset()
 
 void gemmini_t::reset() {
   gemmini_state.reset();
+  cosim_path = p->get_cosim_path();
+  if (cosim_path) {
+    tl_memory.set_cosim_path(cosim_path);
+    printf("Running in cosimulation mode with: \n");
+    printf("    path = %s\n", cosim_path);
+
+  //  printf("Creating new cosim files \n");
+    mkfifo((std::string(cosim_path) + "/RoCCCommandPipe").c_str(), 0666);
+    mkfifo((std::string(cosim_path) + "/GemminiFenceReqPipe").c_str(), 0666);
+    mkfifo((std::string(cosim_path) + "/GemminiFenceRespPipe").c_str(), 0666);
+    mkfifo((std::string(cosim_path) + "/TLDPipe").c_str(), 0666);
+    mkfifo((std::string(cosim_path) + "/TLAPipe").c_str(), 0666);
+
+
+    // Note: Convention is to always open outputs first on the C++ side
+    rocc_command_ofs.rdbuf()->pubsetbuf(0, 0);
+    rocc_command_ofs.open((std::string(cosim_path) + "/RoCCCommandPipe").c_str(),
+                          std::fstream::out | std::fstream::trunc | std::fstream::binary);
+
+    fence_req_ofs.rdbuf()->pubsetbuf(0, 0);
+    fence_req_ofs.open((std::string(cosim_path) + "/GemminiFenceReqPipe").c_str(),
+                       std::fstream::out | std::fstream::trunc | std::fstream::binary);
+
+    fence_resp_ifs.rdbuf()->pubsetbuf(0, 0);
+
+    tld_ofs.rdbuf()->pubsetbuf(0, 0);
+    tld_ofs.open((std::string(cosim_path) + "/TLDPipe").c_str(),
+                 std::fstream::out | std::fstream::trunc | std::fstream::binary);
+
+    tla_ifs.rdbuf()->pubsetbuf(0, 0);
+
+    tl_memory.set_tld_ofs(&tld_ofs);
+    tl_memory.set_tla_ifs(&tla_ifs);
+
+    pthread_create(&tl_memory_thread, NULL, &tl_memory_t::threaded_run, &tl_memory);
+
+    rocc_inst_count = 0;
+  }
+}
+
+void gemmini_t::set_processor(processor_t* _p){
+  p = _p;
+  tl_memory.set_processor(_p);
+}
+
+void gemmini_t::fence() {
+  if(cosim_path) {
+    verif::FenceReq fence_req;
+    verif::FenceResp fence_resp;
+
+    fence_req.set_valid(true);
+    fence_req.set_num(rocc_inst_count);
+    if (!google::protobuf::util::SerializeDelimitedToOstream(fence_req, &fence_req_ofs)) {
+      printf("[Gemmini Fence] Failed to send fence request \n");
+      return;
+    }
+
+  //  printf("[Gemmini Fence] Opening fence resp ifs \n");
+    fence_resp_ifs.open((std::string(cosim_path) + "/GemminiFenceRespPipe").c_str(), std::fstream::in | std::fstream::binary);
+
+
+    while (!fence_resp.ParseFromIstream(&fence_resp_ifs)) {
+  //    printf("[Gemmini Fence] Waiting for fence response \n");
+      fence_resp.ParseFromIstream(&fence_resp_ifs);
+    }
+
+
+    fence_resp_ifs.close();
+
+  //  printf("[Gemmini Fence] Received fence response: %s \n", fence_resp.DebugString().c_str());
+    if(!fence_resp.complete()) {
+      printf("[Gemmini Fence] Fence resp was not complete \n");
+    }
+  }
 }
 
 template <class T>
@@ -769,73 +850,84 @@ void gemmini_t::loop_ws_config_strides_DC(reg_t rs1, reg_t rs2) {
 }
 
 reg_t gemmini_t::custom3(rocc_insn_t insn, reg_t xs1, reg_t xs2) {
-  if (insn.funct == mvin_funct) {
-    mvin(xs1, xs2, 0);
-  } else if (insn.funct == mvin2_funct) {
-    mvin(xs1, xs2, 1);
-  } else if (insn.funct == mvin3_funct) {
-    mvin(xs1, xs2, 2);
-  } else if (insn.funct == mvout_funct) {
-    mvout(xs1, xs2);
-  } else if (insn.funct == preload_funct) {
-    preload(xs1, xs2);
-  } else if (insn.funct == config_funct) {
-    config(xs1, xs2);
-  } else if (insn.funct == compute_preloaded_funct) {
-    compute(xs1, xs2, true);
-  } else if (insn.funct == compute_accumulated_funct) {
-    compute(xs1, xs2, false);
-  } else if (insn.funct == loop_ws_config_bounds_funct) {
-    loop_ws_config_bounds(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_addrs_AB_funct) {
-    loop_ws_config_addrs_AB(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_addrs_DC_funct) {
-    loop_ws_config_addrs_DC(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_strides_AB_funct) {
-    loop_ws_config_strides_AB(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_strides_DC_funct) {
-    loop_ws_config_strides_DC(xs1, xs2);
-  } else if (insn.funct == loop_ws_funct) {
-    loop_ws(xs1, xs2);
-  }
-  //==========================================================================
-  // gemmini-cisc opcodes
-  //==========================================================================
-  /*
-  else if (insn.funct == config_cisc_ex_funct) {
-    config(xs1, xs2);
-  }
-  else if (insn.funct == config_addr_AB_funct) {
-    gemmini_state.a_addr = xs1;
-    gemmini_state.b_addr = xs2;
-  }
-  else if (insn.funct == config_addr_CD_funct ){
-    gemmini_state.c_addr = xs1;
-    gemmini_state.d_addr = xs2;
-  }
-  else if (insn.funct == config_size0_funct ){
-    gemmini_state.m = xs1;
-    gemmini_state.n = xs2;
-  }
-  else if (insn.funct == config_size1_funct ){
-    gemmini_state.k = xs1;
-  }
-  else if (insn.funct == config_repeating_bias_funct){
-    gemmini_state.repeating_bias = (bool)xs1;
-  }
-  else if (insn.funct == config_reset_funct) {
-    reset();
-  }
-  else if (insn.funct == compute_cisc_funct) {
-    compute_cisc();
-  }
-  */
-  //==========================================================================
-  else if (insn.funct == flush_funct) {
-    dprintf("GEMMINI: flush\n");
+  if (cosim_path) {
+    verif::RoCCCommand proto_cmd;
+    gemmini_t::buildRoCCCommandProto(insn, xs1, xs2, &proto_cmd);
+    ++rocc_inst_count;
+    google::protobuf::util::SerializeDelimitedToOstream(proto_cmd, &rocc_command_ofs);
+
+  //    printf("[Gemmini Command] %d: funct: %u, xs1: %lu, xs2: %lu\n", rocc_inst_count, insn.funct, xs1, xs2);
+  //    printf("MStatus: %lu\n", p->get_state()->mstatus);
+  //    printf("Priv: %lu\n", p->get_state()->prv);
   } else {
-    dprintf("GEMMINI: encountered unknown instruction with funct: %d\n", insn.funct);
-    illegal_instruction();
+    if (insn.funct == mvin_funct) {
+      mvin(xs1, xs2, 0);
+    } else if (insn.funct == mvin2_funct) {
+      mvin(xs1, xs2, 1);
+    } else if (insn.funct == mvin3_funct) {
+      mvin(xs1, xs2, 2);
+    } else if (insn.funct == mvout_funct) {
+      mvout(xs1, xs2);
+    } else if (insn.funct == preload_funct) {
+      preload(xs1, xs2);
+    } else if (insn.funct == config_funct) {
+      config(xs1, xs2);
+    } else if (insn.funct == compute_preloaded_funct) {
+      compute(xs1, xs2, true);
+    } else if (insn.funct == compute_accumulated_funct) {
+      compute(xs1, xs2, false);
+    } else if (insn.funct == loop_ws_config_bounds_funct) {
+      loop_ws_config_bounds(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_addrs_AB_funct) {
+      loop_ws_config_addrs_AB(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_addrs_DC_funct) {
+      loop_ws_config_addrs_DC(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_strides_AB_funct) {
+      loop_ws_config_strides_AB(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_strides_DC_funct) {
+      loop_ws_config_strides_DC(xs1, xs2);
+    } else if (insn.funct == loop_ws_funct) {
+      loop_ws(xs1, xs2);
+    }
+      //==========================================================================
+      // gemmini-cisc opcodes
+      //==========================================================================
+      /*
+      else if (insn.funct == config_cisc_ex_funct) {
+        config(xs1, xs2);
+      }
+      else if (insn.funct == config_addr_AB_funct) {
+        gemmini_state.a_addr = xs1;
+        gemmini_state.b_addr = xs2;
+      }
+      else if (insn.funct == config_addr_CD_funct ){
+        gemmini_state.c_addr = xs1;
+        gemmini_state.d_addr = xs2;
+      }
+      else if (insn.funct == config_size0_funct ){
+        gemmini_state.m = xs1;
+        gemmini_state.n = xs2;
+      }
+      else if (insn.funct == config_size1_funct ){
+        gemmini_state.k = xs1;
+      }
+      else if (insn.funct == config_repeating_bias_funct){
+        gemmini_state.repeating_bias = (bool)xs1;
+      }
+      else if (insn.funct == config_reset_funct) {
+        reset();
+      }
+      else if (insn.funct == compute_cisc_funct) {
+        compute_cisc();
+      }
+      */
+      //==========================================================================
+    else if (insn.funct == flush_funct) {
+      dprintf("GEMMINI: flush\n");
+    } else {
+      dprintf("GEMMINI: encountered unknown instruction with funct: %d\n", insn.funct);
+      illegal_instruction();
+    }
   }
   return 0;
 }

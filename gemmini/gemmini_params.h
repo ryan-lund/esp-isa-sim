@@ -4,11 +4,11 @@
 #include <stdint.h>
 #include <limits.h>
 
-#define DIM 16
+#define DIM 4
 #define ADDR_LEN 32
 #define BANK_NUM 4
-#define BANK_ROWS 4096
-#define ACC_ROWS 1024
+#define BANK_ROWS 16384
+#define ACC_ROWS 4096
 #define MAX_BYTES 64
 #define MAX_BLOCK_LEN (MAX_BYTES/(DIM*1))
 #define MAX_BLOCK_LEN_ACC (MAX_BYTES/(DIM*4))
@@ -38,6 +38,12 @@ typedef uint32_t acc_scale_t_bits;
 
 // Rounding right shift equation: https://riscv.github.io/documents/riscv-v-spec/#_vector_fixed_point_rounding_mode_register_vxrm
 #define ROUNDING_RIGHT_SHIFT(x, shift) \
+    ((shift) > 0 ? (((x) >> (shift)) + \
+        (((shift) == 0 ? 0 : (((x) >> ((shift)-1)) & 1)) & \
+             ((((shift) <= 1 ? 0 : ((x) & ((1 << ((shift)-1)) - 1))) != 0) | (((x) >> (shift)) & 1)))) : ((x) << (-(shift))))
+
+// Rounding right shift equation: https://riscv.github.io/documents/riscv-v-spec/#_vector_fixed_point_rounding_mode_register_vxrm
+#define ROUNDING_RIGHT_SHIFT_BITS(x, shift) \
     ((shift) > 0 ? (((x) >> (shift)) + \
         (((shift) == 0 ? 0 : (((x) >> ((shift)-1)) & 1)) & \
              ((((shift) <= 1 ? 0 : ((x) & ((1 << ((shift)-1)) - 1))) != 0) | (((x) >> (shift)) & 1)))) : ((x) << (-(shift))))
