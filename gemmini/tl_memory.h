@@ -37,4 +37,4 @@ private:
     void get(verif::TLA *tla);
     void constructAccessAck(uint32_t source, uint32_t size, verif::TLD *tld);
     void constructAccessAckData(uint32_t source, uint32_t size, char* data, verif::TLD *tld);
-}
+};

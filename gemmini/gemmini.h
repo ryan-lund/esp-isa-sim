@@ -14,6 +14,7 @@
 #include "tl_memory.h"
 #include <pthread.h>
 
+
 typedef acc_t output_t; // Systolic array output datatype (coming down from PEs, moving into accumulator)
 static const uint32_t sp_matrices = (BANK_NUM * BANK_ROWS) / DIM; // Size the scratchpad to fit sp_matrices matrices
 static const uint32_t accum_rows = ACC_ROWS; // Number of systolic array rows in the accumulator
