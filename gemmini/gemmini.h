@@ -3,9 +3,16 @@
 
 #include "extension.h"
 #include "rocc.h"
+#include <fstream>
+#include <fcntl.h>
 #include <random>
+#include <sys/stat.h>
 #include <limits>
 #include "gemmini_params.h"
+#include "RoCC.pb.h"
+#include "Fence.pb.h"
+#include "tl_memory.h"
+#include <pthread.h>
 
 typedef acc_t output_t; // Systolic array output datatype (coming down from PEs, moving into accumulator)
 static const uint32_t sp_matrices = (BANK_NUM * BANK_ROWS) / DIM; // Size the scratchpad to fit sp_matrices matrices
@@ -89,11 +96,25 @@ class gemmini_t : public rocc_t
 {
 public:
   gemmini_t() : cause(0), aux(0), debug(false) {}
+
+  ~gemmini_t() {
+    if (cosim_path) {
+      pthread_cancel(tl_memory_thread);
+      rocc_command_ofs.close();
+      fence_req_ofs.close();
+      fence_resp_ifs.close();
+      tld_ofs.close();
+      tla_ifs.close();
+    }
+  }
   const char* name() { return "gemmini"; }
 
 
   reg_t CUSTOMFN(XCUSTOM_ACC)( rocc_insn_t insn, reg_t xs1, reg_t xs2);
   void reset();
+  void set_processor(processor_t* _p);
+
+  void fence();
 
   void mvin(reg_t dram_addr, reg_t sp_addr, int state_id);
   void mvout(reg_t dram_addr, reg_t sp_addr);
@@ -116,6 +137,18 @@ public:
   void loop_conv_ws_config_4(reg_t rs1, reg_t rs2);
   void loop_conv_ws_config_5(reg_t rs1, reg_t rs2);
   void loop_conv_ws_config_6(reg_t rs1, reg_t rs2);
+
+  tl_memory_t tl_memory;
+  pthread_t tl_memory_thread;
+
+  std::fstream rocc_command_ofs;
+  std::fstream fence_req_ofs;
+  std::fstream fence_resp_ifs;
+  std::fstream tld_ofs;
+  std::fstream tla_ifs;
+
+  const char* cosim_path;
+  int rocc_inst_count;
 
 private:
   gemmini_state_t gemmini_state;
@@ -163,6 +196,19 @@ private:
 
   bool debug;
   elem_t apply_activation(elem_t value);
+
+  void buildRoCCCommandProto(rocc_insn_t insn, reg_t xs1, reg_t xs2, verif::RoCCCommand *proto_cmd) {
+    proto_cmd->mutable_inst()->set_xs1(insn.xs1);
+    proto_cmd->mutable_inst()->set_xs2(insn.xs2);
+    proto_cmd->mutable_inst()->set_xd(insn.xd);
+    proto_cmd->mutable_inst()->set_rs1(insn.rs1);
+    proto_cmd->mutable_inst()->set_rs2(insn.rs2);
+    proto_cmd->mutable_inst()->set_rd(insn.rd);
+    proto_cmd->mutable_inst()->set_opcode(insn.opcode);
+    proto_cmd->mutable_inst()->set_funct(insn.funct);
+    proto_cmd->set_rs1(xs1);
+    proto_cmd->set_rs2(xs2);
+  }
 
 #ifdef HAS_MVIN_SCALE
   elem_t mvin_scale(elem_t value, scale_t scale);

@@ -1350,89 +1350,96 @@ void gemmini_t::loop_conv_ws_config_6(reg_t rs1, reg_t rs2) {
 }
 
 reg_t gemmini_t::CUSTOMFN(XCUSTOM_ACC)(rocc_insn_t insn, reg_t xs1, reg_t xs2) {
-  if (insn.funct == mvin_funct) {
-    mvin(xs1, xs2, 0);
-  } else if (insn.funct == mvin2_funct) {
-    mvin(xs1, xs2, 1);
-  } else if (insn.funct == mvin3_funct) {
-    mvin(xs1, xs2, 2);
-  } else if (insn.funct == mvout_funct) {
-    mvout(xs1, xs2);
-  } else if (insn.funct == preload_funct) {
-    preload(xs1, xs2);
-  } else if (insn.funct == config_funct) {
-    config(xs1, xs2);
-  } else if (insn.funct == compute_preloaded_funct) {
-    compute(xs1, xs2, true);
-  } else if (insn.funct == compute_accumulated_funct) {
-    compute(xs1, xs2, false);
-  } else if (insn.funct == loop_ws_config_bounds_funct) {
-    loop_ws_config_bounds(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_addrs_AB_funct) {
-    loop_ws_config_addrs_AB(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_addrs_DC_funct) {
-    loop_ws_config_addrs_DC(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_strides_AB_funct) {
-    loop_ws_config_strides_AB(xs1, xs2);
-  } else if (insn.funct == loop_ws_config_strides_DC_funct) {
-    loop_ws_config_strides_DC(xs1, xs2);
-  } else if (insn.funct == loop_ws_funct) {
-    loop_ws(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_config_1_funct) {
-    loop_conv_ws_config_1(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_config_2_funct) {
-    loop_conv_ws_config_2(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_config_3_funct) {
-    loop_conv_ws_config_3(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_config_4_funct) {
-    loop_conv_ws_config_4(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_config_5_funct) {
-    loop_conv_ws_config_5(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_config_6_funct) {
-    loop_conv_ws_config_6(xs1, xs2);
-  } else if (insn.funct == loop_conv_ws_funct) {
-    loop_conv_ws(xs1, xs2);
-  }
-  //==========================================================================
-  // gemmini-cisc opcodes
-  //==========================================================================
-  /*
-  else if (insn.funct == config_cisc_ex_funct) {
-    config(xs1, xs2);
-  }
-  else if (insn.funct == config_addr_AB_funct) {
-    gemmini_state.a_addr = xs1;
-    gemmini_state.b_addr = xs2;
-  }
-  else if (insn.funct == config_addr_CD_funct ){
-    gemmini_state.c_addr = xs1;
-    gemmini_state.d_addr = xs2;
-  }
-  else if (insn.funct == config_size0_funct ){
-    gemmini_state.m = xs1;
-    gemmini_state.n = xs2;
-  }
-  else if (insn.funct == config_size1_funct ){
-    gemmini_state.k = xs1;
-  }
-  else if (insn.funct == config_repeating_bias_funct){
-    gemmini_state.repeating_bias = (bool)xs1;
-  }
-  else if (insn.funct == config_reset_funct) {
-    reset();
-  }
-  else if (insn.funct == compute_cisc_funct) {
-    compute_cisc();
-  }
-  */
-  //==========================================================================
-  else if (insn.funct == flush_funct) {
-    dprintf("GEMMINI: flush\n");
-  } else if (insn.funct == fence_funct) {
-    dprintf("GEMMINI: fence\n");
+  if (cosim_path) {
+    verif::RoCCCommand proto_cmd;
+    gemmini_t::buildRoCCCommandProto(insn, xs1, xs2, &proto_cmd);
+    ++rocc_inst_count;
+    google::protobuf::util::SerializeDelimitedToOstream(proto_cmd, &rocc_command_ofs);
   } else {
-    dprintf("GEMMINI: encountered unknown instruction with funct: %d\n", insn.funct);
-    illegal_instruction();
+    if (insn.funct == mvin_funct) {
+      mvin(xs1, xs2, 0);
+    } else if (insn.funct == mvin2_funct) {
+      mvin(xs1, xs2, 1);
+    } else if (insn.funct == mvin3_funct) {
+      mvin(xs1, xs2, 2);
+    } else if (insn.funct == mvout_funct) {
+      mvout(xs1, xs2);
+    } else if (insn.funct == preload_funct) {
+      preload(xs1, xs2);
+    } else if (insn.funct == config_funct) {
+      config(xs1, xs2);
+    } else if (insn.funct == compute_preloaded_funct) {
+      compute(xs1, xs2, true);
+    } else if (insn.funct == compute_accumulated_funct) {
+      compute(xs1, xs2, false);
+    } else if (insn.funct == loop_ws_config_bounds_funct) {
+      loop_ws_config_bounds(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_addrs_AB_funct) {
+      loop_ws_config_addrs_AB(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_addrs_DC_funct) {
+      loop_ws_config_addrs_DC(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_strides_AB_funct) {
+      loop_ws_config_strides_AB(xs1, xs2);
+    } else if (insn.funct == loop_ws_config_strides_DC_funct) {
+      loop_ws_config_strides_DC(xs1, xs2);
+    } else if (insn.funct == loop_ws_funct) {
+      loop_ws(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_config_1_funct) {
+      loop_conv_ws_config_1(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_config_2_funct) {
+      loop_conv_ws_config_2(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_config_3_funct) {
+      loop_conv_ws_config_3(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_config_4_funct) {
+      loop_conv_ws_config_4(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_config_5_funct) {
+      loop_conv_ws_config_5(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_config_6_funct) {
+      loop_conv_ws_config_6(xs1, xs2);
+    } else if (insn.funct == loop_conv_ws_funct) {
+      loop_conv_ws(xs1, xs2);
+    }
+    //==========================================================================
+    // gemmini-cisc opcodes
+    //==========================================================================
+    /*
+    else if (insn.funct == config_cisc_ex_funct) {
+      config(xs1, xs2);
+    }
+    else if (insn.funct == config_addr_AB_funct) {
+      gemmini_state.a_addr = xs1;
+      gemmini_state.b_addr = xs2;
+    }
+    else if (insn.funct == config_addr_CD_funct ){
+      gemmini_state.c_addr = xs1;
+      gemmini_state.d_addr = xs2;
+    }
+    else if (insn.funct == config_size0_funct ){
+      gemmini_state.m = xs1;
+      gemmini_state.n = xs2;
+    }
+    else if (insn.funct == config_size1_funct ){
+      gemmini_state.k = xs1;
+    }
+    else if (insn.funct == config_repeating_bias_funct){
+      gemmini_state.repeating_bias = (bool)xs1;
+    }
+    else if (insn.funct == config_reset_funct) {
+      reset();
+    }
+    else if (insn.funct == compute_cisc_funct) {
+      compute_cisc();
+    }
+    */
+    //==========================================================================
+    else if (insn.funct == flush_funct) {
+      dprintf("GEMMINI: flush\n");
+    } else if (insn.funct == fence_funct) {
+      dprintf("GEMMINI: fence\n");
+    } else {
+      dprintf("GEMMINI: encountered unknown instruction with funct: %d\n", insn.funct);
+      illegal_instruction();
+    }
   }
   return 0;
 }

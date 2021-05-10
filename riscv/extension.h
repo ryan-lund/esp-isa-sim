@@ -15,6 +15,7 @@ class extension_t
   virtual std::vector<disasm_insn_t*> get_disasms() = 0;
   virtual const char* name() = 0;
   virtual void reset() {};
+  virtual void fence() {};
   virtual void set_debug(bool value) {};
   virtual ~extension_t();
 

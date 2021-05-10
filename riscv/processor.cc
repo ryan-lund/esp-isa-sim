@@ -53,6 +53,10 @@ processor_t::~processor_t()
   }
 #endif
 
+  if (ext) {
+    delete ext;
+  }
+
   delete mmu;
   delete disassembler;
 }
@@ -1023,6 +1027,14 @@ reg_t processor_t::get_csr(int which)
   }
   throw trap_illegal_instruction(0);
 }
+
+void processor_t::fence_extension()
+{
+  if(ext) {
+    ext->fence();
+  }
+}
+
 
 reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc)
 {

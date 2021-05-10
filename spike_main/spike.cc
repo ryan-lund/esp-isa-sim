@@ -44,6 +44,7 @@ static void help(int exit_code = 1)
   fprintf(stderr, "                          This flag can be used multiple times.\n");
   fprintf(stderr, "                          The extlib flag for the library must come first.\n");
   fprintf(stderr, "  --log-cache-miss      Generate a log of cache miss\n");
+  fprintf(stderr, "  --cosim-path=<path>   Specify the path to be used for cosimulation\n");
   fprintf(stderr, "  --extension=<name>    Specify RoCC Extension\n");
   fprintf(stderr, "  --extlib=<name>       Shared library to load\n");
   fprintf(stderr, "                        This flag can be used multiple times.\n");
@@ -146,6 +147,7 @@ int main(int argc, char** argv)
   bool log_commits = false;
   const char *log_path = nullptr;
   std::function<extension_t*()> extension;
+  const char* cosim_path = nullptr;
   const char* initrd = NULL;
   const char* isa = DEFAULT_ISA;
   const char* priv = DEFAULT_PRIV;
@@ -240,6 +242,7 @@ int main(int argc, char** argv)
   parser.option(0, "priv", 1, [&](const char* s){priv = s;});
   parser.option(0, "varch", 1, [&](const char* s){varch = s;});
   parser.option(0, "device", 1, device_parser);
+  parser.option(0, "cosim-path", 1, [&](const char* s){cosim_path = s;});
   parser.option(0, "extension", 1, [&](const char* s){extension = find_extension(s);});
   parser.option(0, "dump-dts", 0, [&](const char *s){dump_dts = true;});
   parser.option(0, "disable-dtb", 0, [&](const char *s){dtb_enabled = false;});
@@ -316,6 +319,7 @@ int main(int argc, char** argv)
   if (dc) dc->set_log(log_cache);
   for (size_t i = 0; i < nprocs; i++)
   {
+    s.get_core(i)->set_cosim_path(cosim_path);
     if (ic) s.get_core(i)->get_mmu()->register_memtracer(&*ic);
     if (dc) s.get_core(i)->get_mmu()->register_memtracer(&*dc);
     if (extension) {

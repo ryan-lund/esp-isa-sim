@@ -7,10 +7,18 @@ gemmini_install_prog_srcs = \
 
 gemmini_hdrs = \
 	gemmini.h \
+	RoCC.pb.h \
+	Fence.pb.h \
+	TL.pb.h \
+	tl_memory.h \
 
 
 gemmini_srcs = \
 	gemmini.cc \
+	RoCC.pb.cc \
+	Fence.pb.cc \
+	TL.pb.cc \
+	tl_memory.cc \
 
 gemmini_test_srcs =
 
