@@ -121,7 +121,7 @@ all-link-flags := $(mcppbs-LDFLAGS) $(LDFLAGS)
 
 comma := ,
 LD            := $(CXX)
-LIBS          := @LIBS@
+LIBS          := @LIBS@ -lprotobuf
 LINK          := $(LD) -L. $(all-link-flags) -Wl,-rpath,$(install_libs_dir) $(patsubst -L%,-Wl$(comma)-rpath$(comma)%,$(filter -L%,$(LDFLAGS)))
 
 # Library creation
